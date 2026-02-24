@@ -3,42 +3,44 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# Configuração da Página
+# Configuração da Página baseada no seu modelo
 st.set_page_config(page_title="Domingues Family Hub", layout="wide", page_icon="🏠")
 
-# --- 1. LIGAÇÃO E CARREGAMENTO DE UTILIZADORES ---
+# --- 1. LIGAÇÃO E CARREGAMENTO INICIAL ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Função para carregar utilizadores (necessária para o Login)
-def get_users():
+def load_initial_data():
     try:
-        # Tenta ler a aba 'users' conforme a tua imagem
-        df = conn.read(worksheet="users", ttl=0)
-        return df
+        # Tenta ler a aba 'users' conforme a sua imagem
+        df_u = conn.read(worksheet="users", ttl=0)
+        # Tenta ler as abas financeiras e tarefas para o dashboard
+        df_g = conn.read(worksheet="financas_gerais", ttl=0)
+        df_t = conn.read(worksheet="tarefas", ttl=0)
+        return df_u, df_g, df_t
     except:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-df_u = get_users()
+df_u, df_g, df_t = load_initial_data()
 
-# --- 2. SISTEMA DE LOGIN ---
+# --- 2. SISTEMA DE LOGIN (Estrutura do app (1).py) ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
     st.title("🔐 Login - Família Domingues")
     
-    # Verificação se os dados foram lidos
+    # Verifica se os utilizadores foram carregados
     if df_u.empty:
-        st.error("⚠️ Erro: Não foi possível carregar a lista de utilizadores. Verifique se a aba 'users' existe e se o Sheets está partilhado.")
+        st.error("⚠️ Erro: Não foi possível carregar a lista de utilizadores. Verifique os Secrets e a aba 'users'.")
         st.stop()
 
     with st.form("login"):
-        # Aqui carregamos a lista da coluna 'nome'
-        user_select = st.selectbox("Selecione o Utilizador", df_u["nome"].unique())
-        pass_input = st.text_input("Password", type='password')
+        # Selectbox preenchido com a coluna 'nome' da sua imagem
+        user_select = st.selectbox("Seleccione o Utilizador", df_u["nome"].tolist())
+        pass_input = st.text_input("Palavra-passe", type='password')
         
         if st.form_submit_button("Entrar", use_container_width=True):
-            # Validação contra a folha users
+            # Validação contra a folha
             auth = df_u[(df_u["nome"] == user_select) & (df_u["password"] == pass_input)]
             
             if not auth.empty:
@@ -47,13 +49,12 @@ if not st.session_state.logged_in:
                 st.session_state.perfil = auth.iloc[0]["perfil"]
                 st.rerun()
             else:
-                st.error("Password incorreta")
+                st.error("Utilizador ou Palavra-passe incorretos")
     st.stop()
 
-# --- 3. DASHBOARD APÓS LOGIN (Estilo app (1).py) ---
+# --- 3. LAYOUT DO DASHBOARD (Estilo app (1).py) ---
 st.title(f"👋 Olá, {st.session_state.username}!")
-st.sidebar.write(f"Utilizador: **{st.session_state.username}**")
-st.sidebar.write(f"Acesso: **{st.session_state.perfil}**")
+st.sidebar.info(f"Perfil: {st.session_state.perfil}")
 
 st.write("### ⚡ Atalhos Rápidos")
 c1, c2, c3 = st.columns(3)
@@ -67,42 +68,28 @@ if c3.button("🚪 Sair", use_container_width=True):
 
 st.divider()
 
-# --- 4. CARREGAMENTO DE DADOS FINANCEIROS ---
-def load_data():
-    try:
-        # Lê as abas conforme as tuas imagens
-        df_g = conn.read(worksheet="financas_gerais", ttl=0)
-        df_t = conn.read(worksheet="tarefas", ttl=0)
-        return df_g, df_t
-    except:
-        return pd.DataFrame(), pd.DataFrame()
-
-df_g, df_t = load_data()
-
-# --- 5. MÉTRICAS DO DASHBOARD ---
-st.subheader("📊 Resumo da Família")
+# --- 4. MÉTRICAS E ALERTAS ---
+st.subheader("🔔 Resumo da Família")
 m1, m2, m3 = st.columns(3)
 
 if not df_g.empty:
-    # Usa a coluna 'Valor' da imagem
+    # Usa coluna 'Valor' da imagem
     total = df_g["Valor"].sum()
-    m1.metric("Total Gasto (Comum)", f"{total:,.2f} €")
-    
-    # Última descrição da imagem
-    ultima = df_g["Descrição"].iloc[-1] if not df_g.empty else "N/A"
-    m2.metric("Última Despesa", ultima)
+    m1.metric("Total Gasto (Comum)", f"{total:.2f} €")
+    m2.metric("Última Categoria", df_g["Categoria"].iloc[-1])
 else:
     m1.metric("Total Gasto", "0.00 €")
 
 if not df_t.empty:
-    # Filtra tarefas pendentes da imagem
+    # Filtra tarefas pendentes conforme imagem
     pendentes = len(df_t[df_t["Status"] == "Pendente"])
     m3.metric("Tarefas Pendentes", pendentes, delta_color="inverse")
 
 st.divider()
 
-# Gráfico de Gastos (Estilo app (1).py)
+# --- 5. GRÁFICO DE GASTOS ---
 if not df_g.empty:
     st.markdown("#### 🔄 Gastos por Categoria")
+    # Agrupamento por Categoria da imagem
     chart_data = df_g.groupby("Categoria")["Valor"].sum()
     st.bar_chart(chart_data)
