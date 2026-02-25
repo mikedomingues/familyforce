@@ -11,19 +11,19 @@ st.title("✅ Gestão de Tarefas")
 
 try:
     df_tarefas = conn.read(worksheet="tarefas", ttl=0)
-    
-    pode_gerir = st.session_state.perfil in ["Master", "Admin"]
+    admin_access = st.session_state.perfil in ["Master", "Admin"]
 
-    if pode_gerir:
-        st.write("Edita o status ou atribui tarefas aqui:")
+    if admin_access:
         edited_tasks = st.data_editor(df_tarefas, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Atualizar Tarefas"):
-            conn.update(worksheet="tarefas", data=edited_tasks)
-            st.success("Tarefas atualizadas!")
-            st.rerun()
     else:
-        st.write("Consulta as tuas tarefas pendentes:")
-        st.dataframe(df_tarefas, use_container_width=True)
+        st.info("📝 Podes sugerir novas tarefas, mas apenas o Miguel/Raquel as podem validar ou apagar.")
+        edited_tasks = st.data_editor(df_tarefas, num_rows="dynamic", use_container_width=True,
+                                     disabled=df_tarefas.columns)
+
+    if st.button("💾 Atualizar Lista"):
+        conn.update(worksheet="tarefas", data=edited_tasks)
+        st.success("✅ Sincronizado!")
+        st.rerun()
 
 except Exception as e:
     st.error(f"Erro: {e}")
