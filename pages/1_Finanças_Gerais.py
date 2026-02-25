@@ -11,21 +11,21 @@ st.title("💰 Finanças Gerais")
 
 try:
     df = conn.read(worksheet="financas_gerais", ttl=0)
-    
-    # Verifica se o utilizador tem permissão de edição
-    pode_editar = st.session_state.perfil in ["Master", "Admin"]
+    admin_access = st.session_state.perfil in ["Master", "Admin"]
 
-    if pode_editar:
-        st.info("🔓 Modo Editor: Miguel e Raquel podem alterar dados.")
+    if admin_access:
+        st.info("🔓 Modo Master: Miguel/Raquel (Criar, Editar, Apagar)")
         edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        
-        if st.button("💾 Guardar Alterações"):
-            conn.update(worksheet="financas_gerais", data=edited_df)
-            st.success("Atualizado!")
-            st.rerun()
     else:
-        st.warning("🔒 Modo Leitura: Não tens permissão para editar estas despesas.")
-        st.dataframe(df, use_container_width=True)
+        st.info("📝 Modo Gabriel: Podes adicionar novos gastos, mas não apagar os existentes.")
+        # num_rows="dynamic" permite criar, mas as colunas existentes estão bloqueadas para edição
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, 
+                                   disabled=df.columns) # Bloqueia edição das linhas que já existem
+
+    if st.button("💾 Guardar Alterações"):
+        conn.update(worksheet="financas_gerais", data=edited_df)
+        st.success("✅ Atualizado!")
+        st.rerun()
 
 except Exception as e:
     st.error(f"Erro: {e}")
