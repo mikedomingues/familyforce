@@ -11,25 +11,30 @@ st.title(f"👤 Gestão de Registos: {st.session_state.username}")
 
 try:
     df_full = conn.read(worksheet="financas_individuais", ttl=0)
-    
-    pode_editar_tudo = st.session_state.perfil in ["Master", "Admin"]
+    admin_access = st.session_state.perfil in ["Master", "Admin"]
 
-    if pode_editar_tudo:
-        st.info("🔓 Acesso Total: Podes gerir todos os registos individuais.")
-        df_view = df_full
+    if admin_access:
+        st.info("🔓 Gestão Total (Miguel/Raquel)")
+        edited_ind = st.data_editor(df_full, num_rows="dynamic", use_container_width=True)
     else:
-        # Gabriel só vê as linhas onde o User_ID é o nome dele
+        # Gabriel vê apenas os seus, pode criar novos, mas não editar/apagar os antigos
         df_view = df_full[df_full["User_ID"] == st.session_state.username]
-
-    # Editor para Admin, apenas Tabela para o Gabriel
-    if pode_editar_tudo:
-        edited_ind = st.data_editor(df_view, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Confirmar Alterações"):
-            conn.update(worksheet="financas_individuais", data=edited_ind)
-            st.success("Gravado!")
+        st.info("📝 Podes adicionar novos registos pessoais abaixo.")
+        edited_ind_parcial = st.data_editor(df_view, num_rows="dynamic", use_container_width=True,
+                                           disabled=df_view.columns)
+        
+        # Para o Gabriel, precisamos de juntar o que ele criou com a base total para não apagar os outros
+        if st.button("💾 Guardar os meus registos"):
+            df_final = pd.concat([df_full[df_full["User_ID"] != st.session_state.username], edited_ind_parcial])
+            conn.update(worksheet="financas_individuais", data=df_final)
+            st.success("✅ Guardado!")
             st.rerun()
-    else:
-        st.dataframe(df_view, use_container_width=True)
+        st.stop() # Interrompe aqui para o Gabriel não usar o botão de admin
+
+    if st.button("💾 Confirmar Alterações (Master)"):
+        conn.update(worksheet="financas_individuais", data=edited_ind)
+        st.success("✅ Base de dados atualizada!")
+        st.rerun()
 
 except Exception as e:
     st.error(f"Erro: {e}")
