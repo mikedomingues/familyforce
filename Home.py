@@ -2,65 +2,67 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# Configuração Base
-st.set_page_config(page_title="Domingues Family Hub", layout="wide")
+# Configuração da Página
+st.set_page_config(page_title="Domingues Family Hub", layout="wide", page_icon="🏠")
 
-# Ligação
+# Inicializar Ligação
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# --- LOGIN ---
+# --- 1. LÓGICA DE LOGIN ---
 if not st.session_state.logged_in:
-    st.title("🔐 Acesso Família Domingues")
+    st.title("🔐 Login - Família Domingues")
     
-    with st.form("login_form"):
-        u_name = st.text_input("Utilizador")
-        u_pass = st.text_input("Password", type="password")
+    try:
+        # Carrega a aba 'users' que criaste (image_7d6dbf.png)
+        df_u = conn.read(worksheet="users", ttl=0)
         
-        if st.form_submit_button("Entrar"):
-            try:
-                # Tenta ler a aba 'users'
-                df_u = conn.read(worksheet="users", ttl=0)
-                # Verifica credenciais
-                user_match = df_u[(df_u['nome'] == u_name) & (df_u['password'] == u_pass)]
+        with st.form("login_form"):
+            # Selectbox com os nomes da coluna 'nome' (image_7d717f.png)
+            u_select = st.selectbox("Seleccione o Utilizador", df_u["nome"].tolist())
+            p_input = st.text_input("Palavra-passe", type='password')
+            
+            if st.form_submit_button("Entrar", use_container_width=True):
+                # Validação contra a folha
+                auth = df_u[(df_u["nome"] == u_select) & (df_u["password"] == p_input)]
                 
-                if not user_match.empty:
+                if not auth.empty:
                     st.session_state.logged_in = True
-                    st.session_state.user = u_name
-                    st.session_state.perfil = user_match.iloc[0]['perfil']
+                    st.session_state.username = u_select
+                    st.session_state.perfil = auth.iloc[0]["perfil"]
                     st.rerun()
                 else:
-                    st.error("Utilizador ou password incorretos.")
-            except Exception as e:
-                st.error("Erro ao aceder ao Sheets. Verifique os Secrets.")
-                st.info(f"Detalhe: {e}")
+                    st.error("Palavra-passe incorreta.")
+    except Exception as e:
+        st.error("Erro ao carregar utilizadores. Verifique se partilhou o Sheet com o email da Service Account.")
+
     st.stop()
 
-# --- DASHBOARD ---
-st.title(f"🏠 Olá, {st.session_state.user}!")
-st.sidebar.write(f"Perfil: {st.session_state.perfil}")
+# --- 2. DASHBOARD APÓS LOGIN ---
+st.title(f"🏠 Bem-vindo, {st.session_state.username}!")
+st.sidebar.info(f"Perfil: {st.session_state.perfil}")
 
-# Botões de Navegação
-st.subheader("🚀 Navegação")
+# Atalhos Rápidos baseados no teu modelo app (1).py
+st.subheader("🚀 Atalhos Rápidos")
 c1, c2, c3 = st.columns(3)
-
-if c1.button("💰 Finanças Gerais"):
+if c1.button("💰 Finanças Gerais", use_container_width=True):
     st.switch_page("pages/1_Finanças_Gerais.py")
-if c2.button("👤 Gestão Pessoal"):
+if c2.button("👤 Gestão Pessoal", use_container_width=True):
     st.switch_page("pages/2_Finanças_Individuais.py")
-if c3.button("🚪 Sair"):
+if c3.button("🚪 Sair", use_container_width=True):
     st.session_state.logged_in = False
     st.rerun()
 
 st.divider()
 
-# Gráfico Simples
+# Resumo Financeiro Automático
 try:
     df_g = conn.read(worksheet="financas_gerais", ttl=0)
     if not df_g.empty:
-        st.subheader("📊 Resumo de Gastos")
+        total = df_g["Valor"].sum()
+        st.metric("Total Gasto (Geral)", f"{total:.2f} €")
         st.bar_chart(df_g.groupby("Categoria")["Valor"].sum())
 except:
-    st.info("Aguardando dados para exibir gráficos.")
+    st.info("ℹ️ Adicione dados no Sheets para ver as métricas aqui.")
